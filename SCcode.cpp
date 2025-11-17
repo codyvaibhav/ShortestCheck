@@ -1,143 +1,197 @@
 #include <bits/stdc++.h>
 using namespace std;
 
-struct Pos {
-    int x, y;
+// Board limits
+bool inside(int x, int y) {
+    return x >= 0 && x < 8 && y >= 0 && y < 8;
+}
+
+// Base Class for Chess Pieces
+class ChessPiece {
+public:
+    virtual vector<pair<int,int>> getMoves(int x, int y) = 0;
+    virtual ~ChessPiece() {}
 };
 
-int n = 8;
+// ----------------- Derived Classes ------------------
 
-bool inside(int x, int y) {
-    return x >= 0 && y >= 0 && x < n && y < n;
-}
+// 1. King
+class King : public ChessPiece {
+public:
+    vector<pair<int,int>> getMoves(int x, int y) override {
+        vector<pair<int,int>> moves;
+        int kx[] = {-1,-1,-1,0,0,1,1,1};
+        int ky[] = {-1,0,1,-1,1,-1,0,1};
 
-//Legal moves
-vector<pair<int,int>> getMoves(char piece) {
-    piece = toupper(piece);
-    if (piece == 'N') return {{2,1},{1,2},{-1,2},{-2,1},{-2,-1},{-1,-2},{1,-2},{2,-1}};
-    if (piece == 'K') return {{1,0},{-1,0},{0,1},{0,-1},{1,1},{-1,1},{1,-1},{-1,-1}};
-    return {}; // For R,B,Q handled differently
-}
-
-bool canAttack(char piece, int x, int y, int kx, int ky, vector<vector<char>>& board) {
-    int dx = kx - x, dy = ky - y;
-
-    piece = toupper(piece);
-    if (piece == 'Q' || piece == 'R' || piece == 'B') {
-        // direction normalization
-        int sx = (dx == 0 ? 0 : dx / abs(dx));
-        int sy = (dy == 0 ? 0 : dy / abs(dy));
-
-        // Check valid direction for piece
-        if (piece == 'R' && sx != 0 && sy != 0) return false;
-        if (piece == 'B' && abs(dx) != abs(dy)) return false;
-        if (piece == 'Q' && !((sx == 0 || sy == 0) || (abs(dx) == abs(dy)))) return false;
-
-        // Check line of sight
-        int cx = x + sx, cy = y + sy;
-        while (inside(cx, cy)) {
-            if (cx == kx && cy == ky) return true;
-            if (board[cx][cy] != '.') break; // blocked
-            cx += sx; cy += sy;
+        for (int i = 0; i < 8; i++) {
+            int nx = x + kx[i], ny = y + ky[i];
+            if (inside(nx, ny)) moves.push_back({nx, ny});
         }
-        return false;
+        return moves;
     }
-    else if (piece == 'N') {
-        vector<pair<int,int>> m = {{2,1},{1,2},{-1,2},{-2,1},{-2,-1},{-1,-2},{1,-2},{2,-1}};
-        for (auto [a,b] : m)
-            if (x+a == kx && y+b == ky) return true;
-        return false;
+};
+
+// 2. Knight
+class Knight : public ChessPiece {
+public:
+    vector<pair<int,int>> getMoves(int x, int y) override {
+        vector<pair<int,int>> moves;
+        int kx[] = {2,2,1,1,-1,-1,-2,-2};
+        int ky[] = {1,-1,2,-2,2,-2,1,-1};
+
+        for (int i = 0; i < 8; i++) {
+            int nx = x + kx[i], ny = y + ky[i];
+            if (inside(nx, ny)) moves.push_back({nx, ny});
+        }
+        return moves;
     }
-    else if (piece == 'K') {
-        return abs(dx) <= 1 && abs(dy) <= 1;
-    }
-    else if (piece == 'P') {
-        // Assuming white pawns move upward (decreasing x)
-        return (kx == x-1 && (ky == y-1 || ky == y+1));
-    }
-    return false;
-}
+};
 
-//BFS
-int minMovesToCheck(vector<vector<char>>& board, int sx, int sy, Pos king, char piece) {
-    queue<pair<Pos,int>> q;
-    q.push({{sx,sy},0});
-    vector<vector<int>> vis(8, vector<int>(8,0));
-    vis[sx][sy] = 1;
+// 3. Rook
+class Rook : public ChessPiece {
+public:
+    vector<pair<int,int>> getMoves(int x, int y) override {
+        vector<pair<int,int>> moves;
+        // Horizontal and Vertical
+        int dx[] = {1,-1,0,0};
+        int dy[] = {0,0,1,-1};
 
-    while(!q.empty()){
-        auto [pos, d] = q.front(); q.pop();
-        int x = pos.x, y = pos.y;
-
-        if (canAttack(piece, x, y, king.x, king.y, board))
-            return d;
-
-        // Try possible moves
-        if (toupper(piece) == 'N' || toupper(piece) == 'K' || toupper(piece) == 'P') {
-            for (auto [dx,dy] : getMoves(piece)) {
-                int nx = x + dx, ny = y + dy;
-                if (!inside(nx,ny) || vis[nx][ny]) continue;
-                if (board[nx][ny] == '.') {
-                    vis[nx][ny] = 1;
-                    q.push({{nx,ny}, d+1});
-                }
-            }
-        } else {
-            // Sliding pieces
-            vector<pair<int,int>> dirs;
-            if (toupper(piece) == 'R' || toupper(piece) == 'Q')
-                dirs.insert(dirs.end(), {{1,0},{-1,0},{0,1},{0,-1}});
-            if (toupper(piece) == 'B' || toupper(piece) == 'Q')
-                dirs.insert(dirs.end(), {{1,1},{1,-1},{-1,1},{-1,-1}});
-
-            for (auto [dx,dy] : dirs) {
-                int nx = x+dx, ny = y+dy;
-                while(inside(nx,ny) && board[nx][ny]=='.') {
-                    if (!vis[nx][ny]) {
-                        vis[nx][ny] = 1;
-                        q.push({{nx,ny}, d+1});
-                    }
-                    nx += dx; ny += dy;
-                }
+        for (int d = 0; d < 4; d++) {
+            int nx = x, ny = y;
+            while (true) {
+                nx += dx[d];
+                ny += dy[d];
+                if (!inside(nx, ny)) break;
+                moves.push_back({nx, ny});
             }
         }
+        return moves;
     }
-    return -1; // cannot check king
+};
+
+// 4. Bishop
+class Bishop : public ChessPiece {
+public:
+    vector<pair<int,int>> getMoves(int x, int y) override {
+        vector<pair<int,int>> moves;
+        int dx[] = {1,1,-1,-1};
+        int dy[] = {1,-1,1,-1};
+
+        for (int d = 0; d < 4; d++) {
+            int nx = x, ny = y;
+            while (true) {
+                nx += dx[d];
+                ny += dy[d];
+                if (!inside(nx, ny)) break;
+                moves.push_back({nx, ny});
+            }
+        }
+        return moves;
+    }
+};
+
+// 5. Queen (Combination of Rook + Bishop)
+class Queen : public ChessPiece {
+public:
+    vector<pair<int,int>> getMoves(int x, int y) override {
+        vector<pair<int,int>> moves;
+
+        // Rook moves
+        int dx1[] = {1,-1,0,0};
+        int dy1[] = {0,0,1,-1};
+        for (int d = 0; d < 4; d++) {
+            int nx = x, ny = y;
+            while (true) {
+                nx += dx1[d];
+                ny += dy1[d];
+                if (!inside(nx, ny)) break;
+                moves.push_back({nx, ny});
+            }
+        }
+
+        // Bishop moves
+        int dx2[] = {1,1,-1,-1};
+        int dy2[] = {1,-1,1,-1};
+        for (int d = 0; d < 4; d++) {
+            int nx = x, ny = y;
+            while (true) {
+                nx += dx2[d];
+                ny += dy2[d];
+                if (!inside(nx, ny)) break;
+                moves.push_back({nx, ny});
+            }
+        }
+
+        return moves;
+    }
+};
+
+// 6. Pawn (Assuming white pawn moving upward)
+class Pawn : public ChessPiece {
+public:
+    vector<pair<int,int>> getMoves(int x, int y) override {
+        vector<pair<int,int>> moves;
+
+        // Pawn attack moves (diagonal)
+        int nx1 = x - 1, ny1 = y - 1;
+        int nx2 = x - 1, ny2 = y + 1;
+
+        if (inside(nx1, ny1)) moves.push_back({nx1, ny1});
+        if (inside(nx2, ny2)) moves.push_back({nx2, ny2});
+
+        return moves;
+    }
+};
+
+// ---------------- BFS Shortest Path -------------------
+
+int shortestCheck(ChessPiece* piece, pair<int,int> start, pair<int,int> king) {
+    queue<pair<pair<int,int>, int>> q;
+    bool visited[8][8] = {false};
+
+    q.push({start, 0});
+    visited[start.first][start.second] = true;
+
+    while (!q.empty()) {
+        auto [pos, dist] = q.front(); q.pop();
+        int x = pos.first, y = pos.second;
+
+        if (pos == king) return dist;
+
+        for (auto m : piece->getMoves(x, y)) {
+            int nx = m.first, ny = m.second;
+            if (!visited[nx][ny]) {
+                visited[nx][ny] = true;
+                q.push({{nx, ny}, dist + 1});
+            }
+        }
+    }
+    return -1;  // theoretically never happens
 }
+
+// ---------------- Main Driver -------------------
 
 int main() {
-    vector<vector<char>> board = {
-        {'R','N','.','.','.','.','.','.'},
-        {'.','.','.','.','.','.','.','.'},
-        {'.','.','.','.','.','.','.','.'},
-        {'.','.','.','K','.','.','.','.'},
-        {'.','.','.','.','.','.','.','.'},
-        {'.','.','.','.','.','Q','.','.'},
-        {'.','.','.','p','p','.','.','.'},
-        {'.','.','b','k','p','b','.','.'}
-    };
+    string pieceType;
+    int sx, sy, kx, ky;
+    
+    cin >> pieceType >> sx >> sy >> kx >> ky;
 
-    Pos blackKing, whiteKing;
-    for(int i=0;i<8;i++){
-        for(int j=0;j<8;j++){
-            if(board[i][j]=='k') blackKing = {i,j};
-            if(board[i][j]=='K') whiteKing = {i,j};
-        }
+    ChessPiece* piece;
+
+    if (pieceType == "king") piece = new King();
+    else if (pieceType == "queen") piece = new Queen();
+    else if (pieceType == "rook") piece = new Rook();
+    else if (pieceType == "bishop") piece = new Bishop();
+    else if (pieceType == "knight") piece = new Knight();
+    else if (pieceType == "pawn") piece = new Pawn();
+    else {
+        cout << "Invalid piece type\n";
+        return 0;
     }
 
-    cout << "White pieces attacking Black King:\n";
-    for(int i=0;i<8;i++){
-        for(int j=0;j<8;j++){
-            char p = board[i][j];
-            if (isupper(p)) {
-                int moves = minMovesToCheck(board, i, j, blackKing, p);
-                if(moves!=-1)
-                    cout << p << " → " << moves << " moves\n";
-                else
-                    cout << p << " → cannot check\n";
-            }
-        }
-    }
+    cout << shortestCheck(piece, {sx, sy}, {kx, ky}) << endl;
 
+    delete piece;
     return 0;
 }
